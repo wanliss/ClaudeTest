@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Battle of Marathon 490 BC</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #12100a;
+  color: #d4c5a0;
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  user-select: none;
+}
+h1 { color: #d4af37; font-size: 22px; margin: 6px 0 2px; letter-spacing: 4px; }
+h2 { color: #7a6a4a; font-size: 12px; margin-bottom: 6px; }
+#turn-bar {
+  font-size: 14px; font-weight: bold; padding: 5px 18px;
+  border: 1px solid #6b5a3e; margin-bottom: 8px; min-width: 320px; text-align: center;
+}
+.greek-turn  { color: #d4af37; border-color: #d4af37 !important; }
+.persian-turn{ color: #cc0000; border-color: #cc0000 !important; }
+#main { display: flex; gap: 10px; align-items: flex-start; }
+canvas { display: block; border: 2px solid #6b5a3e; cursor: pointer; }
+#sidebar { width: 182px; display: flex; flex-direction: column; gap: 7px; }
+.panel { border: 1px solid #6b5a3e; padding: 7px; font-size: 12px; }
+.panel h3 { color: #d4af37; margin-bottom: 4px; font-size: 12px; letter-spacing: 1px; }
+#unit-info p { margin: 2px 0; font-size: 11px; }
+.hp-wrap { background: #222; height: 6px; margin: 3px 0; border-radius: 3px; }
+.hp-bar  { height: 100%; border-radius: 3px; transition: width 0.2s; }
+#log { height: 155px; overflow-y: auto; font-size: 10px; line-height: 1.5; }
+.log-greek  { color: #d4af37; }
+.log-persian{ color: #cc3333; }
+.log-sys    { color: #777; }
+button {
+  background: #1e1a0e; color: #d4c5a0; border: 1px solid #6b5a3e;
+  padding: 5px 7px; cursor: pointer; font-family: monospace; font-size: 11px;
+  width: 100%; margin-bottom: 3px; text-align: left;
+}
+button:hover:not(:disabled) { background: #3a2e14; }
+button:disabled { opacity: 0.35; cursor: default; }
+#charge-btn { color: #88ccff; border-color: #446688; }
+#charge-btn:not(:disabled):hover { background: #1a2a3a; }
+.legend-item { display: flex; align-items: center; gap: 5px; margin: 2px 0; font-size: 11px; }
+.gsym { color: #d4af37; font-size: 14px; font-weight: bold; }
+.psym { color: #cc0000; font-size: 14px; font-weight: bold; }
+.tsym { font-size: 12px; }
+#overlay {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85);
+  align-items: center; justify-content: center; z-index: 10;
+}
+#overlay.show { display: flex; }
+#overlay-box {
+  border: 2px solid #d4af37; background: #12100a;
+  padding: 28px 36px; text-align: center; max-width: 380px;
+}
+#ov-title { font-size: 28px; margin-bottom: 10px; }
+.greek-vic  { color: #d4af37; }
+.persian-vic{ color: #cc0000; }
+#ov-desc { color: #bbb; margin: 6px 0; font-size: 13px; }
+#ov-hist { color: #777; margin: 6px 0; font-size: 11px; line-height: 1.5; }
+#play-again { margin-top: 14px; width: auto; padding: 7px 20px; font-size: 13px; border-color: #d4af37; }
+</style>
+</head>
+<body>
+<h1>⚔  BATTLE OF MARATHON  ⚔</h1>
+<h2>490 BC &nbsp;·&nbsp; Athens vs Persia &nbsp;·&nbsp; Turn-based Strategy</h2>
+<div id="turn-bar" class="greek-turn">⚡ GREEK TURN 1 — Select a unit (λ) to command</div>
+<div id="main">
+  <div>
+    <canvas id="c" width="800" height="450"></canvas>
+    <div style="font-size:10px; color:#555; margin-top:4px;">
+      Click λ to select · green = move · red = attack · <b style="color:#d4af37">Λ</b> Miltiades aura (+1 ATK nearby) · phalanx (+1 DEF when adjacent to ally)
+    </div>
+  </div>
+  <div id="sidebar">
+    <div class="panel" id="unit-info">
+      <h3>UNIT INFO</h3>
+      <p style="color:#555">— select a unit —</p>
+    </div>
+    <div class="panel">
+      <h3>ACTIONS</h3>
+      <button id="end-btn"    onclick="endTurn()">End Turn →</button>
+      <button id="charge-btn" onclick="useCharge()" disabled>⚡ Marathon Charge</button>
+      <button onclick="restartGame()" style="color:#666;">↺ New Battle</button>
+    </div>
+    <div class="panel">
+      <h3>LEGEND</h3>
+      <div class="legend-item"><span class="gsym">Λ</span> Miltiades (commander)</div>
+      <div class="legend-item"><span class="gsym">λ</span> Greek hoplite</div>
+      <div class="legend-item"><span class="psym">D</span> Datis (Persian general)</div>
+      <div class="legend-item"><span class="psym">P</span> Persian warrior</div>
+      <div class="legend-item"><span class="psym">A</span> Persian archer (range 3)</div>
+      <div class="legend-item"><span class="tsym" style="color:#5a3e20">■</span> Hill (+1 DEF)</div>
+      <div class="legend-item"><span class="tsym" style="color:#1a4a32">■</span> Marsh (cost 2 MOV)</div>
+    </div>
+    <div class="panel">
+      <h3>OBJECTIVE</h3>
+      <p style="font-size:10px; color:#888; line-height:1.5">
+        Destroy all Persian forces <i>or</i> prevent them reaching column 3.<br>
+        Use phalanx formation and flanking tactics!
+      </p>
+    </div>
+    <div class="panel">
+      <h3>BATTLE LOG</h3>
+      <div id="log"></div>
+    </div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="overlay-box">
+    <div id="ov-title"></div>
+    <p id="ov-desc"></p>
+    <p id="ov-hist"></p>
+    <button id="play-again" onclick="restartGame()">Play Again</button>
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const COLS = 16, ROWS = 9, CW = 50, CH = 50;
+const T = { PLAIN:0, HILL:1, MARSH:2 };
+
+// Terrain map  [row][col]
+const MAP = [
+  [1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+  [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+  [0,0,0,2,2,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,2,2,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+  [0,0,0,0,0,0,0,0,0,2,2,0,0,0,0,0],
+  [1,0,0,0,0,0,0,0,0,0,2,0,0,0,0,1],
+  [1,1,0,0,0,0,0,0,0,0,0,0,0,0,1,1],
+];
+
+function terr(c,r){ return (r>=0&&r<ROWS&&c>=0&&c<COLS) ? MAP[r][c] : T.PLAIN; }
+function movCost(c,r){ return terr(c,r)===T.MARSH ? 2 : 1; }
+function terrDef(c,r){ return terr(c,r)===T.HILL  ? 1 : 0; }
+
+// ── Unit factory ───────────────────────────────────────────────────────────
+const DEFS = {
+  commander:{ sym:'Λ', hp:5, atk:3, def:2, mov:1, range:1, team:'greek',   name:'Miltiades' },
+  hoplite:  { sym:'λ', hp:4, atk:2, def:2, mov:1, range:1, team:'greek',   name:'Hoplite'   },
+  general:  { sym:'D', hp:4, atk:3, def:2, mov:1, range:1, team:'persian', name:'Datis'     },
+  warrior:  { sym:'P', hp:3, atk:2, def:1, mov:1, range:1, team:'persian', name:'Warrior'   },
+  archer:   { sym:'A', hp:2, atk:2, def:0, mov:1, range:3, team:'persian', name:'Archer'    },
+};
+let _uid = 0;
+function mkUnit(type,col,row){
+  const d = DEFS[type];
+  return { id:_uid++, type, col, row, ...d, maxHp:d.hp, moved:false, attacked:false };
+}
+
+// ── Game state ─────────────────────────────────────────────────────────────
+let units=[], selected=null, moveRange=[], atkRange=[];
+let phase='greek', turnNum=1, chargeUsed=false, chargeActive=false;
+
+function greeks()  { return units.filter(u=>u.team==='greek'); }
+function persians(){ return units.filter(u=>u.team==='persian'); }
+function unitAt(c,r){ return units.find(u=>u.col===c&&u.row===r)||null; }
+
+// ── Init ───────────────────────────────────────────────────────────────────
+function initGame(){
+  _uid=0; units=[]; selected=null; moveRange=[]; atkRange=[];
+  phase='greek'; turnNum=1; chargeUsed=false; chargeActive=false;
+  clearLog();
+
+  // Greeks — historic Marathon formation: strong flanks, thin center
+  units.push(mkUnit('commander',1,4));          // Miltiades center
+  // Left (top) flank
+  [[0,0],[1,0],[0,1],[1,1],[0,2]].forEach(([c,r])=>units.push(mkUnit('hoplite',c,r)));
+  // Thin center
+  units.push(mkUnit('hoplite',0,4));
+  // Right (bottom) flank
+  [[0,6],[1,6],[0,7],[1,7],[0,8]].forEach(([c,r])=>units.push(mkUnit('hoplite',c,r)));
+
+  // Persians — more numerous, archers behind warriors
+  units.push(mkUnit('general',15,4));
+  for(let r=0;r<9;r++) units.push(mkUnit('warrior',13,r));   // 9 warriors, col 13
+  [1,3,5,7].forEach(r=>units.push(mkUnit('archer',14,r)));   // 4 archers, col 14
+
+  setPhase('greek');
+  log('⚔ Battle of Marathon begins! Lead Athens!','sys');
+  log('Tip: Keep λ units adjacent for Phalanx (+1 DEF).','sys');
+  log('Tip: Marathon Charge moves ALL units +1 but breaks phalanx.','sys');
+  draw();
+}
+
+// ── Phalanx & aura ────────────────────────────────────────────────────────
+function phalanxBonus(unit){
+  if(unit.team!=='greek'||chargeActive) return 0;
+  const dirs=[[0,1],[0,-1],[1,0],[-1,0]];
+  return dirs.some(([dc,dr])=>{ const u=unitAt(unit.col+dc,unit.row+dr); return u&&u.team==='greek'; })?1:0;
+}
+function cmdAura(unit){
+  if(unit.team!=='greek') return 0;
+  const cmd=units.find(u=>u.type==='commander');
+  if(!cmd) return 0;
+  return Math.abs(unit.col-cmd.col)<=1&&Math.abs(unit.row-cmd.row)<=1&&unit.id!==cmd.id?1:0;
+}
+function persAura(unit){
+  if(unit.team!=='persian') return 0;
+  const gen=units.find(u=>u.type==='general');
+  if(!gen) return 0;
+  return Math.abs(unit.col-gen.col)+Math.abs(unit.row-gen.row)<=2&&unit.id!==gen.id?1:0;
+}
+
+// ── Reachable cells (Dijkstra) ─────────────────────────────────────────────
+function reachable(unit, maxMov){
+  const dist={}; const k0=`${unit.col},${unit.row}`; dist[k0]=0;
+  const pq=[[0,unit.col,unit.row]];
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const [cost,c,r]=pq.shift();
+    if(cost>dist[`${c},${r}`]) continue;
+    for(const [dc,dr] of [[0,1],[0,-1],[1,0],[-1,0]]){
+      const nc=c+dc,nr=r+dr;
+      if(nc<0||nc>=COLS||nr<0||nr>=ROWS) continue;
+      if(unitAt(nc,nr)) continue;
+      const nc2=cost+movCost(nc,nr);
+      if(nc2>maxMov) continue;
+      const nk=`${nc},${nr}`;
+      if(dist[nk]===undefined||nc2<dist[nk]){ dist[nk]=nc2; pq.push([nc2,nc,nr]); }
+    }
+  }
+  return Object.keys(dist).filter(k=>k!==k0).map(k=>{const[c,r]=k.split(',').map(Number);return{c,r};});
+}
+
+// ── Attack cells ───────────────────────────────────────────────────────────
+function atkCells(unit){
+  const cells=[];
+  if(unit.range===1){
+    [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dc,dr])=>{
+      const nc=unit.col+dc,nr=unit.row+dr;
+      if(nc>=0&&nc<COLS&&nr>=0&&nr<ROWS) cells.push({c:nc,r:nr});
+    });
+  } else {
+    for(let dc=-unit.range;dc<=unit.range;dc++)
+      for(let dr=-unit.range;dr<=unit.range;dr++){
+        const md=Math.abs(dc)+Math.abs(dr);
+        if(md>=1&&md<=unit.range){
+          const nc=unit.col+dc,nr=unit.row+dr;
+          if(nc>=0&&nc<COLS&&nr>=0&&nr<ROWS) cells.push({c:nc,r:nr});
+        }
+      }
+  }
+  return cells;
+}
+
+function enemiesInRange(unit){
+  const enemy=unit.team==='greek'?'persian':'greek';
+  return atkCells(unit).filter(({c,r})=>{ const u=unitAt(c,r); return u&&u.team===enemy; });
+}
+
+// ── Combat ─────────────────────────────────────────────────────────────────
+function doAttack(att,def){
+  let atk=att.atk + (att.team==='greek'?cmdAura(att):persAura(att));
+  let dfc=def.def + terrDef(def.col,def.row) + (def.team==='greek'?phalanxBonus(def):0);
+  const dmg=Math.max(1,atk-dfc);
+  def.hp-=dmg;
+  const tc=att.team==='greek'?'greek':'persian';
+  log(`${att.name} → ${def.name}: ${dmg} dmg (${def.hp}/${def.maxHp} HP)`,tc);
+  if(def.hp<=0){
+    log(`✝ ${def.name} falls!`, def.team);
+    units=units.filter(u=>u.id!==def.id);
+    if(selected&&selected.id===def.id){selected=null;moveRange=[];atkRange=[];}
+    return true; // killed
+  }
+  return false;
+}
+
+// ── Victory ────────────────────────────────────────────────────────────────
+function checkVictory(){
+  if(persians().length===0){ showEnd('greek'); return true; }
+  if(greeks().length===0)  { showEnd('persian'); return true; }
+  if(persians().some(u=>u.col<=2)){ showEnd('persian'); return true; }
+  return false;
+}
+function showEnd(winner){
+  phase='end';
+  const ov=document.getElementById('overlay');
+  const title=document.getElementById('ov-title');
+  const desc=document.getElementById('ov-desc');
+  const hist=document.getElementById('ov-hist');
+  ov.classList.add('show');
+  if(winner==='greek'){
+    title.textContent='ATHENIAN VICTORY!'; title.className='greek-vic';
+    desc.textContent=`Athens repels the invasion! ${greeks().length} hoplite${greeks().length!==1?'s':''} survive.`;
+    hist.textContent='History: At Marathon the Athenians charged at a run, routing the Persians. 6,400 Persians fell; only 192 Athenians died. Pheidippides ran 26 miles to Athens to announce the victory — the first marathon.';
+  } else {
+    title.textContent='PERSIAN VICTORY'; title.className='persian-vic';
+    desc.textContent='The Persian army overwhelms the Greeks. Athens is at the mercy of Datis...';
+    hist.textContent='History: In reality, the Athenian phalanx held the line. Miltiades\' genius: thin the center, strengthen the flanks, then encircle. Try again!';
+  }
+  draw();
+}
+
+// ── Phase management ───────────────────────────────────────────────────────
+function setPhase(p){
+  phase=p;
+  const bar=document.getElementById('turn-bar');
+  const eBtn=document.getElementById('end-btn');
+  const cBtn=document.getElementById('charge-btn');
+  if(p==='greek'){
+    bar.textContent=`⚡ GREEK TURN ${turnNum} — Select a unit (λ) to command`;
+    bar.className='greek-turn';
+    eBtn.disabled=false;
+    chargeActive=false;
+    cBtn.disabled=chargeUsed;
+    cBtn.textContent=chargeUsed?'⚡ Charge (used)':'⚡ Marathon Charge';
+    greeks().forEach(u=>{u.moved=false;u.attacked=false;delete u._charged;});
+    selected=null; moveRange=[]; atkRange=[];
+  } else {
+    bar.textContent=`💢 PERSIAN TURN ${turnNum} — Enemy advances...`;
+    bar.className='persian-turn';
+    eBtn.disabled=true; cBtn.disabled=true;
+    selected=null; moveRange=[]; atkRange=[];
+    draw();
+    setTimeout(runPersianAI,500);
+  }
+}
+
+function endTurn(){
+  if(phase!=='greek') return;
+  log(`── End Greek Turn ${turnNum} ──`,'sys');
+  setPhase('persian');
+}
+
+// ── Persian AI ─────────────────────────────────────────────────────────────
+async function runPersianAI(){
+  const snap=persians().slice();
+  for(const pers of snap){
+    if(!units.find(u=>u.id===pers.id)) continue;
+    aiMove(pers);
+    draw();
+    await sleep(130);
+  }
+  if(!checkVictory()){
+    turnNum++;
+    log(`── Greek Turn ${turnNum} ──`,'sys');
+    chargeUsed=false;
+    setPhase('greek');
+    draw();
+  }
+}
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function aiMove(pers){
+  const gs=greeks();
+  if(!gs.length) return;
+  // Find weakest Greek in attack range, else nearest Greek
+  const inRange=enemiesInRange(pers);
+  if(inRange.length){
+    // Attack weakest
+    let tgt=null, minHp=Infinity;
+    for(const {c,r} of inRange){ const u=unitAt(c,r); if(u&&u.hp<minHp){minHp=u.hp;tgt=u;} }
+    if(tgt) doAttack(pers,tgt);
+    return;
+  }
+  // Move toward nearest Greek
+  let nearest=null, bestD=Infinity;
+  for(const g of gs){
+    const d=Math.abs(pers.col-g.col)+Math.abs(pers.row-g.row);
+    if(d<bestD){ bestD=d; nearest=g; }
+  }
+  if(!nearest) return;
+  const mov=pers.mov;
+  const cells=reachable(pers,mov);
+  let bestCell=null, bestDist=bestD;
+  for(const cell of cells){
+    const d=Math.abs(cell.c-nearest.col)+Math.abs(cell.r-nearest.row);
+    if(d<bestDist){ bestDist=d; bestCell=cell; }
+  }
+  if(bestCell){ pers.col=bestCell.c; pers.row=bestCell.r; }
+  // Attack after move
+  const inRange2=enemiesInRange(pers);
+  if(inRange2.length){
+    let tgt=null,minHp=Infinity;
+    for(const {c,r} of inRange2){ const u=unitAt(c,r); if(u&&u.hp<minHp){minHp=u.hp;tgt=u;} }
+    if(tgt) doAttack(pers,tgt);
+  }
+}
+
+// ── Player input ───────────────────────────────────────────────────────────
+document.getElementById('c').addEventListener('click',onCanvasClick);
+
+function onCanvasClick(e){
+  if(phase!=='greek') return;
+  const rect=e.currentTarget.getBoundingClientRect();
+  const col=Math.floor((e.clientX-rect.left)/CW);
+  const row=Math.floor((e.clientY-rect.top)/CH);
+  if(col<0||col>=COLS||row<0||row>=ROWS) return;
+  const clicked=unitAt(col,row);
+
+  if(selected){
+    // Try move
+    if(!selected.moved&&moveRange.some(m=>m.c===col&&m.r===row)&&!clicked){
+      selected.col=col; selected.row=row; selected.moved=true; moveRange=[];
+      if(!selected.attacked) atkRange=enemiesInRange(selected);
+      draw(); updateInfo(selected); return;
+    }
+    // Try attack
+    if(!selected.attacked&&atkRange.some(a=>a.c===col&&a.r===row)&&clicked&&clicked.team==='persian'){
+      doAttack(selected,clicked);
+      selected.attacked=true; atkRange=[]; moveRange=[];
+      if(!checkVictory()) draw();
+      updateInfo(selected); return;
+    }
+    // Switch to another Greek
+    if(clicked&&clicked.team==='greek'&&clicked.id!==selected.id){
+      selectUnit(clicked); return;
+    }
+    // Deselect
+    selected=null; moveRange=[]; atkRange=[]; draw(); updateInfo(null); return;
+  }
+  if(clicked&&clicked.team==='greek') selectUnit(clicked);
+}
+
+function selectUnit(unit){
+  selected=unit;
+  const mov=unit.moved?0:unit.mov+(unit._charged?1:0);
+  moveRange=unit.moved?[]:reachable(unit,mov);
+  atkRange=unit.attacked?[]:enemiesInRange(unit);
+  updateInfo(unit); draw();
+}
+
+// ── Marathon Charge ────────────────────────────────────────────────────────
+function useCharge(){
+  if(phase!=='greek'||chargeUsed) return;
+  chargeUsed=true; chargeActive=true;
+  greeks().forEach(u=>{ if(!u.moved) u._charged=true; });
+  document.getElementById('charge-btn').disabled=true;
+  document.getElementById('charge-btn').textContent='⚡ Charge (used)';
+  log('⚡ MARATHON CHARGE! All hoplites advance at a run! (+1 MOV, phalanx broken this turn)','greek');
+  if(selected&&!selected.moved){
+    moveRange=reachable(selected,selected.mov+1);
+  }
+  draw();
+}
+
+// ── UI ─────────────────────────────────────────────────────────────────────
+function updateInfo(unit){
+  const box=document.getElementById('unit-info');
+  if(!unit){ box.innerHTML='<h3>UNIT INFO</h3><p style="color:#555">— select a unit —</p>'; return; }
+  const col=unit.team==='greek'?'#d4af37':'#cc0000';
+  const myAtk=unit.atk+(unit.team==='greek'?cmdAura(unit):persAura(unit));
+  const myDef=unit.def+terrDef(unit.col,unit.row)+(unit.team==='greek'?phalanxBonus(unit):0);
+  const hpPct=(unit.hp/unit.maxHp*100).toFixed(0);
+  const hpCol=unit.hp/unit.maxHp>0.6?'#3a8a3a':unit.hp/unit.maxHp>0.3?'#aa6622':'#aa2222';
+  box.innerHTML=`
+    <h3 style="color:${col}">${unit.sym} ${unit.name}</h3>
+    <div class="hp-wrap"><div class="hp-bar" style="width:${hpPct}%;background:${hpCol}"></div></div>
+    <p>HP: ${unit.hp}/${unit.maxHp}</p>
+    <p>ATK: ${myAtk}${unit.team==='greek'&&cmdAura(unit)?' <span style="color:#88ccff">(+1 aura)</span>':''}</p>
+    <p>DEF: ${myDef}${unit.team==='greek'&&phalanxBonus(unit)?' <span style="color:#88ff88">(+1 φ)</span>':''}${terrDef(unit.col,unit.row)?' <span style="color:#aa8844">(+1 hill)</span>':''}</p>
+    <p>MOV: ${unit.mov}${unit._charged?' <span style="color:#88ccff">(+1 charge)</span>':''} &nbsp; Range: ${unit.range}</p>
+    <p style="color:#555; font-size:10px; margin-top:3px">${unit.moved?'✓ moved':'○ can move'} · ${unit.attacked?'✓ attacked':'○ can attack'}</p>`;
+}
+
+function log(msg,type='sys'){
+  const d=document.getElementById('log');
+  const p=document.createElement('p');
+  p.className='log-'+type; p.textContent=msg;
+  d.appendChild(p); d.scrollTop=d.scrollHeight;
+}
+function clearLog(){ document.getElementById('log').innerHTML=''; }
+
+// ── Drawing ────────────────────────────────────────────────────────────────
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+
+const CLR={
+  plain:'#1e1a0c', hill:'#3c2e18', marsh:'#102518',
+  grid:'rgba(80,60,30,0.4)', hillText:'rgba(160,120,60,0.55)', marshText:'rgba(50,140,90,0.5)',
+  sel:'rgba(255,255,80,0.25)', selBorder:'#ffff44',
+  move:'rgba(60,180,60,0.22)', atk:'rgba(200,40,40,0.28)',
+  greek:'#d4af37', greekDark:'#2a2000',
+  persian:'#cc0000', persianDark:'#220000',
+};
+
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawTerrain();
+  drawHighlights();
+  units.forEach(drawUnit);
+}
+
+function drawTerrain(){
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const t=terr(c,r);
+    ctx.fillStyle=t===T.HILL?CLR.hill:t===T.MARSH?CLR.marsh:CLR.plain;
+    ctx.fillRect(c*CW,r*CH,CW,CH);
+    ctx.strokeStyle=CLR.grid; ctx.lineWidth=0.5; ctx.strokeRect(c*CW,r*CH,CW,CH);
+    if(t===T.HILL){ ctx.fillStyle=CLR.hillText; ctx.font='11px monospace'; ctx.fillText('⛰',c*CW+3,r*CH+13); }
+    else if(t===T.MARSH){ ctx.fillStyle=CLR.marshText; ctx.font='13px monospace'; ctx.fillText('≈',c*CW+3,r*CH+14); }
+  }
+  // Camp markers
+  ctx.font='10px monospace'; ctx.textAlign='left';
+  ctx.fillStyle='rgba(200,180,80,0.25)'; ctx.fillRect(0,0,2*CW,ROWS*CH);
+  ctx.fillStyle='rgba(180,30,30,0.15)';  ctx.fillRect((COLS-2)*CW,0,2*CW,ROWS*CH);
+  ctx.fillStyle='rgba(200,180,80,0.35)'; ctx.font='9px monospace';
+  ctx.fillText('ATHENS',2,9); ctx.fillText('PERSIA',(COLS-2)*CW+1,9);
+  ctx.textAlign='center';
+}
+
+function drawHighlights(){
+  for(const {c,r} of moveRange){
+    ctx.fillStyle=CLR.move; ctx.fillRect(c*CW,r*CH,CW,CH);
+  }
+  for(const {c,r} of atkRange){
+    ctx.fillStyle=CLR.atk; ctx.fillRect(c*CW,r*CH,CW,CH);
+  }
+  if(selected){
+    ctx.fillStyle=CLR.sel; ctx.fillRect(selected.col*CW,selected.row*CH,CW,CH);
+    ctx.strokeStyle=CLR.selBorder; ctx.lineWidth=2.5;
+    ctx.strokeRect(selected.col*CW+1,selected.row*CH+1,CW-2,CH-2);
+  }
+}
+
+function drawUnit(u){
+  const x=u.col*CW+CW/2, y=u.row*CH+CH/2;
+  const isGreek=u.team==='greek';
+  const mainCol=isGreek?CLR.greek:CLR.persian;
+  const darkCol=isGreek?CLR.greekDark:CLR.persianDark;
+  const done=u.moved&&u.attacked;
+  const isCmd=u.type==='commander'||u.type==='general';
+  const isSelected=selected&&selected.id===u.id;
+
+  // Shadow
+  ctx.beginPath(); ctx.arc(x+1,y+2,19,0,Math.PI*2);
+  ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.fill();
+
+  // Circle
+  ctx.beginPath(); ctx.arc(x,y,18,0,Math.PI*2);
+  ctx.fillStyle=done?'rgba(20,15,5,0.9)':darkCol; ctx.fill();
+  ctx.strokeStyle=done?'rgba(120,100,40,0.5)':mainCol;
+  ctx.lineWidth=isCmd?2.5:isSelected?2.5:1.5;
+  if(isSelected){ ctx.shadowColor=mainCol; ctx.shadowBlur=10; }
+  ctx.stroke(); ctx.shadowBlur=0;
+
+  // Commander ring
+  if(isCmd){
+    ctx.beginPath(); ctx.arc(x,y,21,0,Math.PI*2);
+    ctx.strokeStyle=done?'rgba(100,80,20,0.3)':mainCol+'88'; ctx.lineWidth=1; ctx.stroke();
+  }
+
+  // Symbol
+  ctx.fillStyle=done?mainCol+'55':mainCol;
+  ctx.font=`bold 18px 'Courier New'`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(u.sym,x,y+1);
+
+  // HP bar
+  const hw=CW-10, hx=u.col*CW+5, hy=u.row*CH+CH-7;
+  const frac=u.hp/u.maxHp;
+  ctx.fillStyle='#111'; ctx.fillRect(hx,hy,hw,4);
+  ctx.fillStyle=frac>0.6?'#3a8a3a':frac>0.3?'#aa6622':'#cc2222';
+  ctx.fillRect(hx,hy,hw*frac,4);
+}
+
+// ── Restart ────────────────────────────────────────────────────────────────
+function restartGame(){
+  document.getElementById('overlay').classList.remove('show');
+  initGame();
+}
+
+initGame();
+</script>
+</body>
+</html>
